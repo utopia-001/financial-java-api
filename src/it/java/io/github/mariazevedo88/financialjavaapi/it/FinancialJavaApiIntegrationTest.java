@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 import java.text.ParseException;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
 import org.junit.jupiter.api.Order;
@@ -50,13 +50,8 @@ public class FinancialJavaApiIntegrationTest {
     public void testCreateTransactionNSU123456() throws ParseException {
     	
     	//id=1
-        TransactionDTO dtoNsu123456 = new TransactionDTO(); 
-        dtoNsu123456.setNsu("123456");
-        dtoNsu123456.setAuthorizationNumber("014785");
-        dtoNsu123456.setTransactionDate(FinancialApiUtil.
-        		getLocalDateTimeFromString("2020-08-21T18:32:04.150Z"));
-        dtoNsu123456.setAmount(new BigDecimal(100d));
-        dtoNsu123456.setType(TransactionTypeEnum.CARD);
+        TransactionDTO dtoNsu123456 = new TransactionDTO(null, "123456", "014785", FinancialApiUtil.
+        		getLocalDateTimeFromString("2020-08-21T18:32:04.150Z"), new BigDecimal(100d), TransactionTypeEnum.CARD); 
         
         final HttpHeaders headers = new HttpHeaders();
         headers.set("X-api-key", "FX001-ZBSY6YSLP");
@@ -64,8 +59,7 @@ public class FinancialJavaApiIntegrationTest {
         //Create a new HttpEntity
         final HttpEntity<TransactionDTO> entity = new HttpEntity<>(dtoNsu123456, headers);
         
-        ResponseEntity<String> responseEntity = this.restTemplate
-        		.exchange("http://localhost:" + port + "/financial/v1/transactions", 
+        ResponseEntity<String> responseEntity = this.restTemplate.exchange("http://localhost:" + port + "/financial/v1/transactions", 
         				HttpMethod.POST, entity, String.class);
         
         assertEquals(201, responseEntity.getStatusCodeValue());
@@ -76,12 +70,8 @@ public class FinancialJavaApiIntegrationTest {
     public void testCreateTransactionNSU258963() throws ParseException {
     	
     	//id=2
-    	TransactionDTO dtoNsu258963 = new TransactionDTO(); 
-        dtoNsu258963.setNsu("258963");
-        dtoNsu258963.setTransactionDate(FinancialApiUtil.
-        		getLocalDateTimeFromString("2020-08-21T18:32:04.150Z"));
-        dtoNsu258963.setAmount(new BigDecimal(2546.93));
-        dtoNsu258963.setType(TransactionTypeEnum.MONEY);
+    	TransactionDTO dtoNsu258963 = new TransactionDTO(null, "258963", null, FinancialApiUtil.
+        		getLocalDateTimeFromString("2020-08-21T18:32:04.150Z"), new BigDecimal(2546.93), TransactionTypeEnum.MONEY); 
         
         final HttpHeaders headers = new HttpHeaders();
         headers.set("X-api-key", "FX001-ZBSY6YSLP");
@@ -89,8 +79,7 @@ public class FinancialJavaApiIntegrationTest {
         //Create a new HttpEntity
         final HttpEntity<TransactionDTO> entity = new HttpEntity<>(dtoNsu258963, headers);
         
-        ResponseEntity<String> responseEntity = this.restTemplate
-        		.exchange("http://localhost:" + port + "/financial/v1/transactions", 
+        ResponseEntity<String> responseEntity = this.restTemplate.exchange("http://localhost:" + port + "/financial/v1/transactions", 
         				HttpMethod.POST, entity, String.class);
         
         assertEquals(201, responseEntity.getStatusCodeValue());
@@ -106,16 +95,12 @@ public class FinancialJavaApiIntegrationTest {
         //Create a new HttpEntity
         final HttpEntity<String> entity = new HttpEntity<>(headers);
         
-        LocalDateTime startDateTime = FinancialApiUtil.
-        		getLocalDateTimeFromString("2020-08-21T18:32:04.150Z");
-        LocalDateTime endDateTime = startDateTime.plusDays(5);
-        
-        String startDate = startDateTime.format(FinancialApiUtil.getDateFormater());
-		String endDate = endDateTime.format(FinancialApiUtil.getDateFormater());
+        String startDate = LocalDate.of(2020, 8, 20).toString();
+		String endDate = LocalDate.of(2020, 8, 30).toString();
 
 		ResponseEntity<String> responseEntity = this.restTemplate
-        		.exchange("http://localhost:" + port + "/financial/v1/transactions?startDate=" + startDate + "&endDate=" + endDate,  
-        				HttpMethod.GET, entity, String.class);
+        		.exchange("http://localhost:" + port + "/financial/v1/transactions?startDate=" + startDate + "&endDate=" + endDate
+        				+ "&page=" + 1 + "&size=" + 2 + "&order=ASC", HttpMethod.GET, entity, String.class);
     	
         assertEquals(200, responseEntity.getStatusCodeValue());
     }

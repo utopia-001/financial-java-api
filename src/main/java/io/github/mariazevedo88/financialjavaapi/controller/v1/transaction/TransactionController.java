@@ -11,9 +11,10 @@ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
 
 import javax.validation.Valid;
 
-import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
@@ -38,7 +39,6 @@ import io.github.mariazevedo88.financialjavaapi.dto.response.Response;
 import io.github.mariazevedo88.financialjavaapi.exception.NotParsableContentException;
 import io.github.mariazevedo88.financialjavaapi.exception.TransactionInvalidUpdateException;
 import io.github.mariazevedo88.financialjavaapi.exception.TransactionNotFoundException;
-import io.github.mariazevedo88.financialjavaapi.model.enumeration.PageOrderEnum;
 import io.github.mariazevedo88.financialjavaapi.model.transaction.Transaction;
 import io.github.mariazevedo88.financialjavaapi.service.transaction.TransactionService;
 import io.github.mariazevedo88.financialjavaapi.util.FinancialApiUtil;
@@ -56,7 +56,7 @@ import lombok.extern.log4j.Log4j2;
 @RequestMapping("/financial/v1/transactions")
 public class TransactionController {
 	
-	private TransactionService transactionService;
+	TransactionService transactionService;
 	
 	@Autowired
 	public TransactionController(TransactionService transactionService) {
@@ -94,9 +94,9 @@ public class TransactionController {
 	 */
 	@PostMapping
 	@ApiOperation(value = "Route to create a transaction")
-	public ResponseEntity<Response<TransactionDTO>> create(@RequestHeader(value=FinancialApiUtil.HEADER_FINANCIAL_API_VERSION, defaultValue="${api.version}") 
-		String apiVersion, @RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, 
-		@Valid @RequestBody TransactionDTO dto, BindingResult result) throws NotParsableContentException {
+	public ResponseEntity<Response<TransactionDTO>> create(@RequestHeader(value=FinancialApiUtil.HEADER_FINANCIAL_API_VERSION, defaultValue="${api.version}") String apiVersion, 
+			@RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, @Valid @RequestBody TransactionDTO dto, BindingResult result) 
+					throws NotParsableContentException {
 		
 		Response<TransactionDTO> response = new Response<>();
 
@@ -109,10 +109,12 @@ public class TransactionController {
 			throw new NotParsableContentException("Date of the transaction is in the future.");
 		}
 		
-		Transaction transaction = transactionService.save(convertDTOToEntity(dto));
-		TransactionDTO dtoSaved = convertEntityToDTO(transaction);
-		createSelfLink(transaction, dtoSaved);
-		
+		Transaction transaction = dto.convertDTOToEntity(); 
+		Transaction transactionToCreate = transactionService.save(transaction);
+
+		TransactionDTO dtoSaved = transactionToCreate.convertEntityToDTO();
+		createSelfLink(transactionToCreate, dtoSaved);
+
 		response.setData(dtoSaved);
 		
 		MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
@@ -154,9 +156,9 @@ public class TransactionController {
 	 */
 	@PutMapping(path = "/{id}")
 	@ApiOperation(value = "Route to update a transaction")
-	public ResponseEntity<Response<TransactionDTO>> update(@RequestHeader(value=FinancialApiUtil.HEADER_FINANCIAL_API_VERSION, defaultValue="${api.version}") 
-		String apiVersion, @RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, @Valid @RequestBody TransactionDTO dto, 
-		BindingResult result) throws TransactionNotFoundException, TransactionInvalidUpdateException, NotParsableContentException {
+	public ResponseEntity<Response<TransactionDTO>> update(@RequestHeader(value=FinancialApiUtil.HEADER_FINANCIAL_API_VERSION, defaultValue="${api.version}") String apiVersion, 
+		@RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, @Valid @RequestBody TransactionDTO dto, BindingResult result) 
+		throws TransactionNotFoundException, TransactionInvalidUpdateException, NotParsableContentException {
 		
 		Response<TransactionDTO> response = new Response<>();
 
@@ -174,10 +176,11 @@ public class TransactionController {
 			throw new TransactionInvalidUpdateException("You don't have permission to change the transaction id=" + dto.getId());
 		}
 
-		Transaction transaction = transactionService.save(convertDTOToEntity(dto));
-		TransactionDTO itemDTO = convertEntityToDTO(transaction);
+		Transaction transaction = dto.convertDTOToEntity();
+		Transaction transactionToUpdate = transactionService.save(transaction);
 		
-		createSelfLink(transaction, itemDTO);
+		TransactionDTO itemDTO = transactionToUpdate.convertEntityToDTO();
+		createSelfLink(transactionToUpdate, itemDTO);
 		response.setData(itemDTO);
 		
 		MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
@@ -197,8 +200,9 @@ public class TransactionController {
 	 * @param apiKey - API Key to access the routes
 	 * @param startDate - the start date of the search
 	 * @param endDate - the end date of the search
-	 * @param page - the page that will be return in the search
-	 * @param order - the sort order that the results should be shown: ASC - ascending order; DESC - descending order
+	 * @param pageable Object for pagination information: the page that will be return in the search, 
+	 * the size of page, and sort direction that the results should be shown: ASC - ascending order; 
+	 * DESC - descending order.
 	 * 
 	 * @return ResponseEntity with a <code>Response<Page<TransactionDTO>></code> object and the HTTP status
 	 * 
@@ -215,23 +219,22 @@ public class TransactionController {
 	@ApiOperation(value = "Route to find all transactions of the API in a period of time")
 	public ResponseEntity<Response<Page<TransactionDTO>>> findAllBetweenDates(@RequestHeader(value=FinancialApiUtil.HEADER_FINANCIAL_API_VERSION, defaultValue="${api.version}") 
 		String apiVersion, @RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") 
-	    LocalDate startDate, @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate, @RequestParam(name="page", defaultValue = "0") int page,
-	    @RequestParam(name="order", defaultValue = "ASC") String order) throws TransactionNotFoundException {
+	    LocalDate startDate, @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate, @PageableDefault(page = 1, size = 10, sort = {"id"}) Pageable pageable) 
+	    		throws TransactionNotFoundException {
 		
 		Response<Page<TransactionDTO>> response = new Response<>();
 		
 		LocalDateTime startDateTime = FinancialApiUtil.convertLocalDateToLocalDateTime(startDate);
 		LocalDateTime endDateTime = FinancialApiUtil.convertLocalDateToLocalDateTime(endDate);
 		
-		Page<Transaction> transactions = transactionService.findBetweenDates(startDateTime, endDateTime, 
-				page, PageOrderEnum.getSortDirection(order));
+		Page<Transaction> transactions = transactionService.findBetweenDates(startDateTime, endDateTime, pageable);
 		
 		if (transactions.isEmpty()) {
 			throw new TransactionNotFoundException("There are no transactions registered between startDate=" + startDate 
 					+ " and endDate=" + endDate);
 		}
 		
-		Page<TransactionDTO> itemsDTO = transactions.map(this::convertEntityToDTO);
+		Page<TransactionDTO> itemsDTO = transactions.map(t -> t.convertEntityToDTO());
 		itemsDTO.stream().forEach(dto -> {
 			try {
 				createSelfLinkInCollections(apiVersion, apiKey, dto);
@@ -286,7 +289,7 @@ public class TransactionController {
 		}
 		
 		List<TransactionDTO> transactionsDTO = new ArrayList<>();
-		transactions.stream().forEach(t -> transactionsDTO.add(convertEntityToDTO(t)));
+		transactions.stream().forEach(t -> transactionsDTO.add(t.convertEntityToDTO()));
 		
 		transactionsDTO.stream().forEach(dto -> {
 			try {
@@ -311,6 +314,7 @@ public class TransactionController {
 	 * @param apiVersion - API version at the moment
 	 * @param apiKey - API Key to access the routes
 	 * @param transactionId - the id of the transaction
+	 * @param fields - Transaction fields that should be returned in JSON as Partial Response
 	 * 
 	 * @return ResponseEntity with a <code>Response<TransactionDTO></code> object and the HTTP status
 	 * 
@@ -320,7 +324,7 @@ public class TransactionController {
 	 * 400 - Bad Request: The request was unacceptable, often due to missing a required parameter.
 	 * 404 - Not Found: The requested resource doesn't exist.
 	 * 409 - Conflict: The request conflicts with another request (perhaps due to using the same idempotent key).
-	 * 429 - Too Many Requests: Too many requests hit the API too quickly. We recommend an exponential backoff of your requests.
+	 * 429 - Too Many Requests: Too many requests hit the API too quickly. We recommend an exponential back-off of your requests.
 	 * 500, 502, 503, 504 - Server Errors: something went wrong on API end (These are rare).
 	 * 
 	 * @throws TransactionNotFoundException
@@ -328,13 +332,18 @@ public class TransactionController {
 	@GetMapping(value = "/{id}")
 	@ApiOperation(value = "Route to find a transaction by your id in the API")
 	public ResponseEntity<Response<TransactionDTO>> findById(@RequestHeader(value=FinancialApiUtil.HEADER_FINANCIAL_API_VERSION, defaultValue="${api.version}") 
-		String apiVersion, @RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, 
-		@PathVariable("id") Long transactionId) throws TransactionNotFoundException {
+		String apiVersion, @RequestHeader(value=FinancialApiUtil.HEADER_API_KEY, defaultValue="${api.key}") String apiKey, @PathVariable("id") Long transactionId,
+		@RequestParam(required = false) String fields) throws TransactionNotFoundException {
 		
 		Response<TransactionDTO> response = new Response<>();
 		Transaction transaction = transactionService.findById(transactionId);
 		
-		TransactionDTO dto = convertEntityToDTO(transaction);
+		TransactionDTO dto = transaction.convertEntityToDTO();
+		
+		if(fields != null) {
+			dto = transactionService.getPartialJsonResponse(fields, dto);
+		}
+		
 		createSelfLink(transaction, dto);
 		response.setData(dto);
 		
@@ -388,36 +397,6 @@ public class TransactionController {
 	}
 	
 	/**
-	 * Method to convert an Transaction DTO to a Transaction entity.
-	 * 
-	 * @author Mariana Azevedo
-	 * @since 03/04/2020
-	 * 
-	 * @param dto
-	 * @return a <code>Transaction</code> object
-	 */
-	private Transaction convertDTOToEntity(TransactionDTO dto) {
-		
-		ModelMapper modelMapper = new ModelMapper();
-		return modelMapper.map(dto, Transaction.class);
-	}
-
-	/**
-	 * Method to convert an Transaction entity to a Transaction DTO.
-	 * 
-	 * @author Mariana Azevedo
-	 * @since 03/04/2020
-	 * 
-	 * @param transaction
-	 * @return a <code>TransactionDTO</code> object
-	 */
-	private TransactionDTO convertEntityToDTO(Transaction transaction) {
-		
-		ModelMapper modelMapper = new ModelMapper();
-		return modelMapper.map(transaction, TransactionDTO.class);
-	}
-	
-	/**
 	 * Method that creates a self link to transaction object
 	 * 
 	 * @author Mariana Azevedo
@@ -444,8 +423,8 @@ public class TransactionController {
 	 */
 	private void createSelfLinkInCollections(String apiVersion, String apiKey, final TransactionDTO transactionDTO) 
 			throws TransactionNotFoundException {
-		Link selfLink = linkTo(methodOn(TransactionController.class).findById(apiVersion, apiKey, 
-				transactionDTO.getId())).withSelfRel();
+		Link selfLink = linkTo(methodOn(TransactionController.class).findById(apiVersion, apiKey, transactionDTO.getId(), null))
+				.withSelfRel().expand();
 		transactionDTO.add(selfLink);
 	}
 	

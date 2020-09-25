@@ -4,16 +4,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.Sort.Direction;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ContainerNode;
+import com.zero_x_baadf00d.partialize.Partialize;
+
+import io.github.mariazevedo88.financialjavaapi.dto.model.transaction.TransactionDTO;
 import io.github.mariazevedo88.financialjavaapi.exception.TransactionNotFoundException;
-import io.github.mariazevedo88.financialjavaapi.model.enumeration.PageOrderEnum;
 import io.github.mariazevedo88.financialjavaapi.model.transaction.Transaction;
 import io.github.mariazevedo88.financialjavaapi.repository.transaction.TransactionRepository;
 import io.github.mariazevedo88.financialjavaapi.service.transaction.TransactionService;
@@ -27,10 +28,7 @@ import io.github.mariazevedo88.financialjavaapi.service.transaction.TransactionS
 @Service
 public class TransactionServiceImpl implements TransactionService {
 	
-	private TransactionRepository transactionRepository;
-	
-	@Value("${pagination.items_per_page}")
-	private int itemsPerPage;
+	TransactionRepository transactionRepository;
 	
 	@Autowired
 	public TransactionServiceImpl(TransactionRepository transactionRepository) {
@@ -74,17 +72,13 @@ public class TransactionServiceImpl implements TransactionService {
 	}
 
 	/**
-	 * @see TransactionService#findBetweenDates()
+	 * @see TransactionService#findBetweenDates(LocalDateTime, LocalDateTime, Pageable)
 	 */
 	@Override
-	public Page<Transaction> findBetweenDates(LocalDateTime startDate, LocalDateTime endDate, int page, 
-			PageOrderEnum order) {
-		Sort sort = Direction.ASC.name().equals(order.getValue()) ? 
-				Sort.by("id").ascending() : Sort.by("id").descending();
-		PageRequest pg = PageRequest.of(page, itemsPerPage, sort);
+	public Page<Transaction> findBetweenDates(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
 		return transactionRepository.
 				findAllByTransactionDateGreaterThanEqualAndTransactionDateLessThanEqual(startDate, 
-					endDate, pg);
+					endDate, pageable);
 	}
 
 	/**
@@ -93,6 +87,17 @@ public class TransactionServiceImpl implements TransactionService {
 	@Override
 	public List<Transaction> findAll() {
 		return transactionRepository.findAll();
+	}
+
+	/**
+	 * @see TransactionService#getPartialJsonResponse(String, TransactionDTO)
+	 */
+	@Override
+	public TransactionDTO getPartialJsonResponse(String fields, TransactionDTO dto) {
+		
+		final Partialize partialize = new Partialize();
+		final ContainerNode<?> node = partialize.buildPartialObject(fields, TransactionDTO.class, dto);
+		return new ObjectMapper().convertValue(node, TransactionDTO.class);
 	}
 
 }
